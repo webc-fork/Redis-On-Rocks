@@ -1,15 +1,13 @@
 #ifndef HDR_MALLOC_H__
 #define HDR_MALLOC_H__
 
-#include <stdlib.h>
+void *valkey_malloc(size_t size);
+void *zcalloc_num(size_t num, size_t size);
+void *valkey_realloc(void *ptr, size_t size);
+void valkey_free(void *ptr);
 
-void *zmalloc(size_t size);
-void *zcalloc(size_t size);
-void *zrealloc(void *ptr, size_t size);
-void zfree(void *ptr);
-
-#define hdr_malloc zmalloc
-#define hdr_calloc(num, size) zcalloc((size_t)(num) * (size_t)(size))
-#define hdr_realloc zrealloc
-#define hdr_free zfree
+#define hdr_malloc valkey_malloc
+#define hdr_calloc zcalloc_num
+#define hdr_realloc valkey_realloc
+#define hdr_free valkey_free
 #endif

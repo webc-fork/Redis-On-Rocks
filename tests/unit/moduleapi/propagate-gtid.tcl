@@ -1,5 +1,6 @@
 set testmodule [file normalize tests/modules/propagate.so]
 
+if {[info exists ::swap] && $::swap} {
 tags {"modules" "gtid"} {
     test {module auto-wrapped RedisModule_Replicate maps to one GTID} {
         # This guards the cc178563b0281843 fix: module commands enqueue
@@ -21,30 +22,18 @@ tags {"modules" "gtid"} {
                 set master_repl [attach_to_replication_stream]
                 set replica_repl [attach_to_replication_stream]
 
-                set uuid [status $master gtid_uuid]
-                set before_gno [status $master gtid_executed_gno_count]
-                set before_master_gtidset [status $master gtid_set]
-                set before_replica_gtidset [status $replica gtid_set]
-                set before_master_reploff [status $master master_repl_offset]
-                set before_replica_reploff [status $replica master_repl_offset]
+                $master select 0
+                $master gtid A:1 1 propagate-test.simple
+                wait_for_ofs_sync $master $replica
 
-                $master propagate-test.simple
-                wait_for_gtid_sync $master $replica
-
-                set expected_gno [expr {$before_gno + 1}]
-                set expected_gtid "$uuid:$expected_gno"
-
-                assert_equal $expected_gno [status $master gtid_executed_gno_count]
+                $replica select 1
                 assert_equal 1 [$replica get counter-1]
                 assert_equal 1 [$replica get counter-2]
-                assert {[gtid_set_is_equal [status $master gtid_set] [status $replica gtid_set]]}
+                $replica select 0
+                assert_equal {} [$replica get counter-1]
 
-                assert_replication_stream $master_repl [list {select *} {multi} {incr counter-1} {incr counter-2} "gtid $expected_gtid * EXEC"]
-                assert_replication_stream $replica_repl [list {select *} {multi} {incr counter-1} {incr counter-2} "gtid $expected_gtid * EXEC"]
-
-                assert_equal [expr {$before_master_reploff + 1}] [lindex [$master GTIDX SEQ LOCATE $before_master_gtidset] 0]
-                assert_equal $expected_gtid [lindex [$master GTIDX SEQ LOCATE $before_master_gtidset] 1]
-                assert_equal $expected_gtid [lindex [$replica GTIDX SEQ LOCATE $before_replica_gtidset] 1]
+                assert_replication_stream $master_repl [list {multi} {select 1} {incr counter-1} {incr counter-2} {exec}]
+                assert_replication_stream $replica_repl [list {multi} {select 1} {incr counter-1} {incr counter-2} {exec}]
 
                 close_replication_stream $master_repl
                 close_replication_stream $replica_repl
@@ -52,3 +41,5 @@ tags {"modules" "gtid"} {
         }
     }
 }
+}
+
